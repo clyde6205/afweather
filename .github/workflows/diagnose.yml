@@ -1,0 +1,35 @@
+name: Diagnose failed build
+
+on:
+  workflow_run:
+    workflows: ["Backend CI"]
+    types: [completed]
+  workflow_dispatch:
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'failure' || github.event_name == 'workflow_dispatch' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Capture failed run log
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo "=== Backend CI runs ==="
+            gh run list --workflow "Backend CI" --limit 5 \
+              --json status,conclusion,displayTitle,databaseId,createdAt \
+              -t '\t{{.status}}\t{{.conclusion}}\t{{.displayTitle}}\t{{.databaseId}}\t{{.createdAt}}'
+            FAILED_ID=${{ github.event.workflow_run.id }}
+            echo
+            echo "=== failed run ${FAILED_ID} log ==="
+            gh run view "${FAILED_ID}" --log-failed 2>/dev/null | tail -n 300 || true
+          } > docs/build-diagnosis.txt
+      - name: Commit diagnosis
+        run: |
+          git config user.name "diagnose-bot"
+          git config user.email "actions@github.com"
+          git add docs/build-diagnosis.txt
+          git commit -m "docs: build diagnosis (auto)" || echo "no changes"
+          git push

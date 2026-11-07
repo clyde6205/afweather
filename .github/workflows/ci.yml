@@ -1,0 +1,40 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-and-boot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Compile TypeScript
+        run: npx tsc --noEmit
+
+      - name: Boot server (no database)
+        run: |
+          cp .env.example .env || true
+          PORT=3457 NODE_ENV=production npx ts-node src/server.ts &
+          SERVER_PID=$!
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3457/health > /tmp/health.json 2>/dev/null; then
+              echo "Health check OK:"; cat /tmp/health.json
+              kill $SERVER_PID
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "ERROR: server never became healthy"
+          kill $SERVER_PID 2>/dev/null
+          exit 1

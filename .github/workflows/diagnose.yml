@@ -6,6 +6,9 @@ on:
     types: [completed]
   workflow_dispatch:
 
+permissions:
+  actions: read
+  contents: write
 jobs:
   diagnose:
     runs-on: ubuntu-latest

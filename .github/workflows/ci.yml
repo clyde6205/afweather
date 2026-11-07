@@ -6,6 +6,10 @@ on:
     paths-ignore: [ 'docs/**' ]
   workflow_dispatch:
 
+permissions:
+  actions: read
+  contents: write
+
 jobs:
   build-and-boot:
     runs-on: ubuntu-latest
@@ -39,3 +43,19 @@ jobs:
           echo "ERROR: server never became healthy"
           kill $SERVER_PID 2>/dev/null
           exit 1
+
+      - name: Capture failure log (self-diagnosing)
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo "=== afweather Backend CI — $(date -u) ==="
+            echo "commit: ${GITHUB_SHA}"
+            gh run view "${GITHUB_RUN_ID}" --log-failed 2>/dev/null | tail -n 250 || echo "(log capture failed)"
+          } > docs/build-diagnosis.txt
+          git config user.name "ci-bot"
+          git config user.email "actions@github.com"
+          git add docs/build-diagnosis.txt
+          git commit -m "docs: build diagnosis (auto from afweather Backend CI)" || echo "no changes"
+          git push || echo "push failed"
